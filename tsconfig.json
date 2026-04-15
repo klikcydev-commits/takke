@@ -1,0 +1,16 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["scripts/**/*.ts", "prisma.config.ts"],
+  "exclude": [
+    "node_modules",
+    "apps/**/node_modules",
+    "packages/**/node_modules",
+    "**/.next",
+    "**/dist",
+    "**/*.tsbuildinfo"
+  ]
+}

@@ -1,0 +1,125 @@
+diff --git a/node_modules/sonner-native/lib/commonjs/use-default-styles.js b/node_modules/sonner-native/lib/commonjs/use-default-styles.js
+index 01174b3..2408c78 100644
+--- a/node_modules/sonner-native/lib/commonjs/use-default-styles.js
++++ b/node_modules/sonner-native/lib/commonjs/use-default-styles.js
+@@ -32,7 +32,8 @@ const useDefaultStyles = ({
+   return {
+     toast: {
+       justifyContent: 'center',
+-      padding: 16,
++      paddingVertical: 6,
++      paddingHorizontal: 16,
+       borderRadius: 16,
+       marginHorizontal: 16,
+       backgroundColor: richColors ? colors.rich[variant].background : colors['background-primary'],
+@@ -42,12 +43,13 @@ const useDefaultStyles = ({
+     },
+     toastContent: {
+       flexDirection: 'row',
+-      gap: 16,
+-      alignItems: description?.length === 0 ? 'center' : undefined
++      gap: 10,
++      alignItems: 'center'
+     },
+     title: {
+       fontWeight: '600',
+       lineHeight: 20,
++      includeFontPadding: false,
+       color: richColors ? colors.rich[variant].foreground : colors['text-primary']
+     },
+     description: {
+@@ -90,8 +92,8 @@ const useDefaultStyles = ({
+       alignSelf: 'flex-start',
+       color: colors['text-secondary']
+     },
+-    iconColor: richColors ? colors.rich[variant].foreground : colors[variant],
+-    closeButtonColor: richColors ? colors.rich[variant].foreground : colors['text-secondary']
++    iconColor: colors['background-primary'] === '#fff' ? '#000' : '#fff',
++    closeButtonColor: colors['text-secondary']
+   };
+ };
+ exports.useDefaultStyles = useDefaultStyles;
+diff --git a/node_modules/sonner-native/lib/module/use-default-styles.js b/node_modules/sonner-native/lib/module/use-default-styles.js
+index 9e63289..699fa3b 100644
+--- a/node_modules/sonner-native/lib/module/use-default-styles.js
++++ b/node_modules/sonner-native/lib/module/use-default-styles.js
+@@ -28,7 +28,8 @@ export const useDefaultStyles = ({
+   return {
+     toast: {
+       justifyContent: 'center',
+-      padding: 16,
++      paddingVertical: 6,
++      paddingHorizontal: 16,
+       borderRadius: 16,
+       marginHorizontal: 16,
+       backgroundColor: richColors ? colors.rich[variant].background : colors['background-primary'],
+@@ -38,12 +39,13 @@ export const useDefaultStyles = ({
+     },
+     toastContent: {
+       flexDirection: 'row',
+-      gap: 16,
+-      alignItems: description?.length === 0 ? 'center' : undefined
++      gap: 10,
++      alignItems: 'center'
+     },
+     title: {
+       fontWeight: '600',
+       lineHeight: 20,
++      includeFontPadding: false,
+       color: richColors ? colors.rich[variant].foreground : colors['text-primary']
+     },
+     description: {
+@@ -86,8 +88,8 @@ export const useDefaultStyles = ({
+       alignSelf: 'flex-start',
+       color: colors['text-secondary']
+     },
+-    iconColor: richColors ? colors.rich[variant].foreground : colors[variant],
+-    closeButtonColor: richColors ? colors.rich[variant].foreground : colors['text-secondary']
++    iconColor: colors['background-primary'] === '#fff' ? '#000' : '#fff',
++    closeButtonColor: colors['text-secondary']
+   };
+ };
+ //# sourceMappingURL=use-default-styles.js.map
+\ No newline at end of file
+diff --git a/node_modules/sonner-native/src/use-default-styles.ts b/node_modules/sonner-native/src/use-default-styles.ts
+index bd36f23..f31bd6c 100644
+--- a/node_modules/sonner-native/src/use-default-styles.ts
++++ b/node_modules/sonner-native/src/use-default-styles.ts
+@@ -51,7 +51,8 @@ export const useDefaultStyles = ({
+   return {
+     toast: {
+       justifyContent: 'center',
+-      padding: 16,
++      paddingVertical: 6,
++      paddingHorizontal: 16,
+       borderRadius: 16,
+       marginHorizontal: 16,
+       backgroundColor: richColors
+@@ -63,12 +64,13 @@ export const useDefaultStyles = ({
+     },
+     toastContent: {
+       flexDirection: 'row',
+-      gap: 16,
+-      alignItems: description?.length === 0 ? 'center' : undefined,
++      gap: 10,
++      alignItems: 'center',
+     },
+     title: {
+       fontWeight: '600',
+       lineHeight: 20,
++      includeFontPadding: false,
+       color: richColors
+         ? colors.rich[variant].foreground
+         : colors['text-primary'],
+@@ -115,9 +117,7 @@ export const useDefaultStyles = ({
+       alignSelf: 'flex-start',
+       color: colors['text-secondary'],
+     },
+-    iconColor: richColors ? colors.rich[variant].foreground : colors[variant],
+-    closeButtonColor: richColors
+-      ? colors.rich[variant].foreground
+-      : colors['text-secondary'],
++    iconColor: colors['background-primary'] === '#fff' ? '#000' : '#fff',
++    closeButtonColor: colors['text-secondary'],
+   };
+ };

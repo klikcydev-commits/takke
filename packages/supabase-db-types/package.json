@@ -1,0 +1,17 @@
+{
+  "name": "@marketplace/supabase-db-types",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/database.types.ts",
+  "types": "./src/database.types.ts",
+  "exports": {
+    ".": {
+      "types": "./src/database.types.ts",
+      "import": "./src/database.types.ts"
+    }
+  },
+  "scripts": {
+    "generate": "echo Regenerate with: npx supabase gen types typescript --project-ref YOUR_REF --schema public > src/database.types.ts"
+  }
+}

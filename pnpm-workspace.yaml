@@ -1,0 +1,6 @@
+# Explicit app packages only — Nest `apps/api` removed; backend is Supabase + Next route handlers.
+packages:
+  - "apps/admin-web"
+  - "apps/vendor-web"
+  - "apps/mobile"
+  - "packages/*"
