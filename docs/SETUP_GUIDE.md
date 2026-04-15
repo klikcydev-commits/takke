@@ -1,24 +1,41 @@
-# Platform Setup Guide
+# Setup Guide (Supabase-First)
 
-## Requirements
-- Node.js >= 18
-- pnpm >= 8
-- Docker (for local postgres/redis if not using hosted direct)
-- Expo CLI for mobile simulation
-- Supabase Project
+## 1) Install
 
-## Bootstrapping Environment
-1. Initialize dependencies using pnpm at workspace root.
-   `pnpm install`
-2. Sync `.env` file references from `.env.example` mapping Supabase API URLs, Anon Keys, and Postgres Direct DB connection string.
+```bash
+pnpm install
+```
 
-## Database Preparation
-Use Prisma to seed structure to your active Supabase postgres cluster.
-1. `npx prisma db push` (or `migrate dev`)
-2. `npx prisma db seed` -> Generates structured realistic roles and mock objects across the ecosystem.
+## 2) Configure env
 
-## Running Applications
-- **Customer Mobile**: `pnpm --filter mobile start`
-- **Vendor + commerce API (Next `/api`)**: `pnpm --filter vendor-web dev`
-- **Admin dashboard**: `pnpm --filter admin-web dev`
-- **Both**: `pnpm dev` from repo root
+```bash
+cp .env.example .env
+```
+
+Required values:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+## 3) Apply SQL migrations
+
+```bash
+pnpm db:migrate
+```
+
+## 4) Run apps
+
+```bash
+pnpm dev:vendor
+pnpm dev:admin
+pnpm dev:mobile
+```
+
+## 5) Optional seeded auth linking
+
+```bash
+pnpm db:link-supabase-auth
+```
+
+This links existing `public."User"` rows by email to Supabase Auth users.

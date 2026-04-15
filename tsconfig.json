@@ -4,7 +4,7 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["scripts/**/*.ts", "prisma.config.ts"],
+  "include": ["scripts/**/*.ts"],
   "exclude": [
     "node_modules",
     "apps/**/node_modules",

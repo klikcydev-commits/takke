@@ -57,8 +57,11 @@ export default function StoreOnboardingPage() {
   const [formData, setFormData] = useState({
     businessName: "",
     businessType: "RETAIL",
+    fullName: "",
     description: "",
-    email: "",
+    authEmail: "",
+    authPassword: "",
+    businessContactEmail: "",
     phone: "",
     address: "",
     city: "",
@@ -67,6 +70,9 @@ export default function StoreOnboardingPage() {
     country: "",
     licenseUrl: "",
     taxIdUrl: "",
+    logoUrl: "",
+    bannerUrl: "",
+    profileImageUrl: "",
     bankName: "",
     accountNumber: "",
     accountHolder: "",
@@ -82,6 +88,11 @@ export default function StoreOnboardingPage() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSessionReady(!!session?.access_token);
+    });
+    void supabase.auth.getUser().then(({ data }) => {
+      const email = data.user?.email ?? "";
+      if (!email) return;
+      setFormData((prev) => ({ ...prev, authEmail: email }));
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -207,14 +218,23 @@ export default function StoreOnboardingPage() {
     const payload = {
       businessName: formData.businessName,
       businessType: formData.businessType,
+      fullName: formData.fullName,
       description: formData.description || undefined,
-      contactEmail: formData.email,
+      contactEmail: formData.businessContactEmail || undefined,
       contactPhone: formData.phone,
       businessAddress,
       city: formData.city,
       state: formData.state,
       country: formData.country.trim() || "—",
+      authEmail: formData.authEmail.trim(),
+      logoUrl: formData.logoUrl,
+      bannerUrl: formData.bannerUrl,
+      profileImageUrl: formData.profileImageUrl || undefined,
+      bankName: formData.bankName,
+      accountNumber: formData.accountNumber,
+      accountHolder: formData.accountHolder,
       metadata: {
+        authEmail: formData.authEmail,
         zip: formData.zip,
         licenseUrl: formData.licenseUrl || undefined,
         taxIdUrl: formData.taxIdUrl || undefined,
@@ -227,14 +247,35 @@ export default function StoreOnboardingPage() {
     };
 
     try {
-      const token = await getSupabaseAccessToken();
-      if (!token) throw new Error("Not signed in");
+      let token = await getSupabaseAccessToken();
+      let authUserId: string | undefined;
+      if (!token) {
+        if (!formData.authPassword.trim()) {
+          throw new Error("Create an account password to finish registration.");
+        }
+        const supabase = createClient();
+        const [firstName, ...rest] = formData.fullName.trim().split(" ");
+        const { data, error } = await supabase.auth.signUp({
+          email: formData.authEmail.trim(),
+          password: formData.authPassword,
+          options: {
+            data: {
+              first_name: firstName || formData.fullName.trim(),
+              last_name: rest.join(" ").trim() || null,
+            },
+            emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent("/vendor/dashboard")}`,
+          },
+        });
+        if (error) throw error;
+        authUserId = data.user?.id;
+        token = data.session?.access_token ?? null;
+      }
       await apiFetch("/applications/store", {
         method: "POST",
-        body: JSON.stringify(payload),
-        token,
+        body: JSON.stringify({ ...payload, authUserId }),
+        token: token ?? undefined,
       });
-      router.push("/register/store/success");
+      router.push(token ? "/vendor/dashboard" : "/register/store/success");
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Submission failed");
     } finally {
@@ -255,8 +296,10 @@ export default function StoreOnboardingPage() {
     if (currentStep === 0) {
       return (
         formData.businessName.trim() &&
-        formData.email.trim() &&
-        formData.phone.trim()
+        formData.fullName.trim() &&
+        formData.authEmail.trim() &&
+        formData.phone.trim() &&
+        (sessionReady || formData.authPassword.trim().length >= 8)
       );
     }
     if (currentStep === 1) {
@@ -264,7 +307,23 @@ export default function StoreOnboardingPage() {
         formData.address.trim() &&
         formData.city.trim() &&
         formData.state.trim() &&
+        formData.zip.trim() &&
         formData.country.trim()
+      );
+    }
+    if (currentStep === 2) {
+      return (
+        formData.licenseUrl.trim() &&
+        formData.taxIdUrl.trim() &&
+        formData.logoUrl.trim() &&
+        formData.bannerUrl.trim()
+      );
+    }
+    if (currentStep === 3) {
+      return (
+        formData.bankName.trim() &&
+        formData.accountHolder.trim() &&
+        formData.accountNumber.trim()
       );
     }
     return true;
@@ -278,7 +337,7 @@ export default function StoreOnboardingPage() {
     );
   }
 
-  if (!sessionReady) {
+  if (false && !sessionReady) {
     return (
       <div className="min-h-screen bg-[#fdfcfb] flex flex-col items-center justify-center p-6">
         <div className="w-full max-w-md luxury-card p-10 space-y-8">
@@ -460,6 +519,16 @@ export default function StoreOnboardingPage() {
                 </div>
                 <div className="grid gap-6 py-4">
                   <div className="space-y-2">
+                    <label className="text-sm font-medium">Full name (legal owner)</label>
+                    <input
+                      name="fullName"
+                      value={formData.fullName}
+                      onChange={updateForm}
+                      className="luxury-input w-full"
+                      placeholder="e.g. Jane Doe"
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <label className="text-sm font-medium">Official Business Name</label>
                     <input
                       name="businessName"
@@ -469,18 +538,38 @@ export default function StoreOnboardingPage() {
                       placeholder="e.g. Maison de Elégance"
                     />
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Contact email</label>
+                        <label className="text-sm font-medium">Account email (authenticated)</label>
                       <input
-                        name="email"
+                          name="authEmail"
                         type="email"
-                        value={formData.email}
-                        onChange={updateForm}
+                          value={formData.authEmail}
+                          onChange={updateForm}
                         className="luxury-input w-full"
-                        placeholder="contact@yourstore.com"
+                          placeholder="you@example.com"
                       />
+                        <p className="text-xs text-gray-500">
+                          Enter your account email. It must match your signed-in account.
+                        </p>
                     </div>
+                    {!sessionReady && (
+                      <div className="space-y-2 sm:col-span-2">
+                        <label className="text-sm font-medium">Account password</label>
+                        <input
+                          name="authPassword"
+                          type="password"
+                          minLength={8}
+                          value={formData.authPassword}
+                          onChange={updateForm}
+                          className="luxury-input w-full"
+                          placeholder="Create a password (min 8 chars)"
+                        />
+                        <p className="text-xs text-gray-500">
+                          We will create your account and send verification email on submit.
+                        </p>
+                      </div>
+                    )}
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Phone</label>
                       <input
@@ -490,6 +579,17 @@ export default function StoreOnboardingPage() {
                         className="luxury-input w-full"
                         placeholder="+1 …"
                       />
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <label className="text-sm font-medium">Business contact email (optional)</label>
+                        <input
+                          name="businessContactEmail"
+                          type="email"
+                          value={formData.businessContactEmail}
+                          onChange={updateForm}
+                          className="luxury-input w-full"
+                          placeholder="ops@yourstore.com"
+                        />
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -571,7 +671,7 @@ export default function StoreOnboardingPage() {
                 </div>
                 <div className="grid gap-6 py-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Business license URL (optional)</label>
+                    <label className="text-sm font-medium">Business license URL</label>
                     <input
                       name="licenseUrl"
                       value={formData.licenseUrl}
@@ -581,7 +681,7 @@ export default function StoreOnboardingPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Tax ID document URL (optional)</label>
+                    <label className="text-sm font-medium">Tax ID document URL</label>
                     <input
                       name="taxIdUrl"
                       value={formData.taxIdUrl}
@@ -600,6 +700,36 @@ export default function StoreOnboardingPage() {
                         Paste secure URLs above, or wire storage later — your application is still submitted for review.
                       </p>
                     </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Store logo URL</label>
+                    <input
+                      name="logoUrl"
+                      value={formData.logoUrl}
+                      onChange={updateForm}
+                      className="luxury-input w-full"
+                      placeholder="https://..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Store banner URL</label>
+                    <input
+                      name="bannerUrl"
+                      value={formData.bannerUrl}
+                      onChange={updateForm}
+                      className="luxury-input w-full"
+                      placeholder="https://..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Profile image URL (optional)</label>
+                    <input
+                      name="profileImageUrl"
+                      value={formData.profileImageUrl}
+                      onChange={updateForm}
+                      className="luxury-input w-full"
+                      placeholder="https://..."
+                    />
                   </div>
                   <div className="flex gap-4 p-4 bg-secondary/30 rounded-xl border border-border italic text-sm text-gray-600">
                     <Info className="w-5 h-5 flex-shrink-0" />
@@ -655,7 +785,14 @@ export default function StoreOnboardingPage() {
                     <span className="font-medium">Business:</span> {formData.businessName}
                   </p>
                   <p>
-                    <span className="font-medium">Contact:</span> {formData.email} · {formData.phone}
+                    <span className="font-medium">Owner:</span> {formData.fullName}
+                  </p>
+                  <p>
+                    <span className="font-medium">Account:</span> {formData.authEmail}
+                  </p>
+                  <p>
+                    <span className="font-medium">Business contact:</span>{" "}
+                    {formData.businessContactEmail || "Same as account email"} · {formData.phone}
                   </p>
                   <p>
                     <span className="font-medium">Location:</span> {formData.city}, {formData.state},{" "}

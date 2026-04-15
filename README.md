@@ -1,221 +1,465 @@
-# Marketplace monorepo
+# Marketplace Monorepo (Supabase-First)
 
-pnpm workspace: **Prisma** → PostgreSQL (usually **Supabase**), **vendor** and **admin** Next.js apps (same-origin **`/api`** route handlers via **`@marketplace/marketplace-server`**), **Expo** mobile app.
+This repository runs a Supabase-first marketplace stack:
 
-### Quick start (after `.env` and `pnpm db:setup` or migrate + seed)
+- `apps/mobile` (Expo React Native)
+- `apps/vendor-web` (Next.js vendor + driver web)
+- `apps/admin-web` (Next.js admin web)
+- Supabase Auth, Postgres, Storage, SQL migrations, and generated DB types
 
-```bash
-pnpm dev
+Prisma is no longer part of active runtime architecture.
+
+## Architecture
+
+- Runtime APIs are implemented in Next.js route handlers in:
+  - `apps/vendor-web/src/app/api`
+  - `apps/admin-web/src/app/api`
+- Server-side privileged operations use Supabase service-role key only in server handlers.
+- Client apps only use publishable/anon keys.
+- Role/tenant isolation is enforced in server handlers and database policies.
+
+## Project Structure
+
+```text
+apps/
+  admin-web/
+  vendor-web/
+  mobile/
+packages/
+  shared-supabase/
+  supabase-db-types/
+  database/
+supabase/
+  migrations/
+scripts/
 ```
 
-Starts **vendor (3000)** + **admin (3002)**. On a **memory-constrained** machine use `pnpm dev:lite` instead. See **`docs/DEV_SCRIPTS.md`** for all dev commands and ports.
+## Setup
 
-### Admin app (Phase 1): Supabase Auth
-
-The **admin-web** UI uses **Supabase Auth** for sign-in and session (cookies). Admin dashboard data uses same-origin **`/api/admin/*`** route handlers (Prisma) with the **Supabase access token** in `Authorization: Bearer` (see `SUPABASE_JWT_SECRET` in `.env`).
-
-1. Apply migrations (includes `auth_user_id` on `public."User"`): `pnpm db:migrate` or `pnpm db:migrate:dev`
-2. Seed: `pnpm db:seed`
-3. Copy **JWT Secret** from Supabase Dashboard → Settings → API into **`SUPABASE_JWT_SECRET`** in root `.env`
-4. Link seeded users to Supabase Auth: `pnpm db:link-supabase-auth` (creates/finds `auth.users`, sets `User.auth_user_id`, and **confirms email** via Admin API so login works with “Confirm email” enabled). New users get password **`ChangeMe123!`**. If the email **already existed** with another password: `LINK_RESET_AUTH_PASSWORD=1 pnpm db:link-supabase-auth`.
-5. Optional: run `supabase/migrations/20260211120000_user_rls_auth_slice.sql` in the Supabase SQL editor for profile RLS
-6. Run **admin** + **vendor**: `pnpm dev` (or `pnpm run dev:admin` / `pnpm run dev:vendor` separately)
-
-Admin login: **Supabase Auth** (not the Prisma `hashedPassword` field). Use **`admin@marketplace.com`** / **`ChangeMe123!`** after a successful link (or reset via Dashboard → Authentication → Users).
-
----
-
-## Prerequisites
-
-- Node.js ≥ 18  
-- [pnpm](https://pnpm.io/)  
-- A Supabase project (Postgres + optional Storage buckets for uploads)
-
----
-
-## 1. Install dependencies
+1. Install dependencies:
 
 ```bash
 pnpm install
 ```
 
----
-
-## 2. Configure environment
+2. Copy env template and fill values:
 
 ```bash
 cp .env.example .env
 ```
 
-Edit **`.env` at the repo root**. Do **not** hand-type Postgres passwords; use **exact strings from the Supabase dashboard**.
-
-### Supabase → Postgres URLs (critical)
-
-Paste **exact** strings from **Supabase → Connect**. Do **not** guess pooler regions or hostnames.
-
-| Variable | Where to copy from | Purpose |
-|----------|-------------------|---------|
-| **`DATABASE_URL`** | **Connect → Transaction pooler** (Supavisor, port **6543**, user `postgres.<PROJECT_REF>`) | **Next `/api` route handlers** (`@marketplace/marketplace-server`), **`prisma db seed`**, and any long-lived server connections. Must include **`?pgbouncer=true`**. |
-| **`DIRECT_URL`** | **Connect → Session pooler** (Supavisor, port **5432**, same user pattern) | **Prisma CLI only** (`migrate`, `db push`, `studio`). Uses Session mode so migrations work; **not** the transaction pooler (`6543`). |
-
-**IPv4 / connectivity:** The **Direct connection** string (`db.<project>.supabase.co:5432`) often fails from **IPv4-only** networks with Prisma **`P1001`** (cannot reach host). That is expected in many environments — **do not** rely on the direct host for Prisma CLI here. Use the **Session pooler** URI for **`DIRECT_URL`** instead.
-
-**If you see `FATAL: Tenant or user not found`:** reset the **database password** in **Project Settings → Database**, then paste fresh **Transaction** + **Session** pooler strings from **Connect**. URL-encode special characters in passwords (e.g. `!` → `%21`).
-
-### Other keys
-
-- **`NEXT_PUBLIC_SUPABASE_URL`**, **`NEXT_PUBLIC_SUPABASE_KEY`**, **`SUPABASE_SERVICE_ROLE_KEY`**: **Settings → API** (service role for server-side storage uploads).  
-- **`apps/vendor-web/.env.local`**: same public Supabase keys; leave **`NEXT_PUBLIC_API_URL`** unset to use same-origin **`/api`**.  
-- **`apps/mobile/.env.local`**: `EXPO_PUBLIC_SUPABASE_*` and **`EXPO_PUBLIC_VENDOR_API_URL=http://<your-LAN-IP>:3000/api`** for physical devices hitting vendor-web (not `localhost`).
-
----
-
-## 3. Generate Prisma Client
+3. Apply Supabase SQL migrations:
 
 ```bash
-pnpm prisma generate
-```
-
-(`pnpm db:generate` is the same script.)
-
----
-
-## 4. Run migrations (default workflow)
-
-**Prefer migration files** (tracked in `prisma/migrations/`):
-
-```bash
-# After schema changes in development (creates/applies migrations):
-pnpm db:migrate:dev
-
-# Deploy migrations (CI / production):
 pnpm db:migrate
 ```
 
-`prisma.config.ts` sets the CLI datasource to **`DIRECT_URL` first**, then **`DATABASE_URL`**. **`DIRECT_URL`** should be the **Session pooler** (`:5432`) from Connect, not the direct `db.*` host, when the latter is unreachable.
-
-**Prototype only** (no migration history):
+4. (Optional) Link seeded emails to Supabase Auth users:
 
 ```bash
-pnpm db:push
+pnpm db:link-supabase-auth
 ```
 
----
-
-## 5. Seed the database
+## Run
 
 ```bash
+pnpm dev:vendor
+pnpm dev:admin
+pnpm dev:mobile
+```
+
+Or run web apps together:
+
+```bash
+pnpm dev:all
+```
+
+## Database and Types
+
+- Source of truth: Supabase SQL migrations in `supabase/migrations`.
+- Generated DB types package: `packages/supabase-db-types`.
+
+Generate/update type guidance:
+
+```bash
+pnpm db:types
+```
+
+## Security Notes
+
+- Never expose `SUPABASE_SERVICE_ROLE_KEY` to clients.
+- Keep admin and moderation flows server-side only.
+- Use authenticated user + role checks for every privileged route.
+- Keep audit log writes and status history writes for operational mutations.
+
+## Current Runtime Status
+
+- Vendor API runtime: Supabase-native
+- Admin API runtime: Supabase-native
+- Mobile auth/profile runtime path: Supabase-native
+
+Legacy Prisma sources may remain in archived folders for historical reference only; they are not active runtime dependencies.
+# Marketplace Monorepo
+
+Monorepo for a multi-role commerce and delivery platform with:
+- `admin-web` (Next.js) for admin operations
+- `vendor-web` (Next.js) for vendor/store and driver-facing web flows
+- `mobile` (Expo React Native) for end-user mobile experience
+- shared server/business logic in `@marketplace/marketplace-server`
+
+Primary actors implemented in code: customers, store owners/vendors, delivery drivers, and admins.
+
+## 1) Project Overview
+
+This platform combines marketplace flows (catalog, cart, checkout, orders) with onboarding and operational flows (store applications, driver applications, admin review, delivery assignment/status updates).
+
+Current architecture is hybrid:
+- Supabase is used for auth/session and parts of data access.
+- Prisma + PostgreSQL schema still power a large part of business data access in shared server modules.
+- There is active migration work from Prisma-only paths to Supabase-first paths in selected endpoints.
+
+## 2) Tech Stack
+
+- **Monorepo / package manager:** pnpm workspaces
+- **Web frontend:** Next.js 16 (App Router), React 19, TypeScript
+- **Mobile frontend:** Expo SDK 54, React Native 0.81, Expo Router
+- **Auth:** Supabase Auth (`@supabase/supabase-js`, `@supabase/ssr`)
+- **Database access:**
+  - Prisma 7 + `pg` adapter for many server data modules
+  - Supabase service-role client for specific server routes/helpers
+- **Database:** PostgreSQL (typically Supabase-hosted)
+- **Styling/UI:** Tailwind CSS 4 (web), custom RN components (mobile), Framer Motion (web)
+- **State/data client libs:** Zustand, TanStack React Query, Axios
+- **Tooling:** TypeScript, ESLint, tsx, concurrently, cross-env, patch-package
+
+## 3) Repository Structure
+
+```text
+.
+├─ apps/
+│  ├─ admin-web/         # Admin Next.js app (port 3002)
+│  ├─ vendor-web/        # Vendor/driver Next.js app (port 3000)
+│  └─ mobile/            # Expo React Native app
+├─ packages/
+│  ├─ marketplace-server/  # Shared server/domain logic used by route handlers
+│  ├─ shared-supabase/     # Shared Supabase helpers/types/errors/access checks
+│  ├─ supabase-db-types/   # Supabase DB TS types
+│  └─ database/            # Placeholder/minimal package
+├─ prisma/               # Prisma schema, migrations, seed
+├─ scripts/              # Repo scripts (e.g. link-supabase-auth)
+├─ docs/                 # Specs, setup, architecture, troubleshooting notes
+├─ package.json          # Root scripts (dev orchestration + db scripts)
+└─ pnpm-workspace.yaml   # Workspace package list
+```
+
+## 4) How the Application Works
+
+### End-to-end flow (high level)
+
+- Users authenticate with Supabase.
+- Web/mobile clients call Next.js route handlers under `/api/*`.
+- Route handlers delegate business operations to shared modules in `@marketplace/marketplace-server`.
+- Many of those modules currently use Prisma-backed DB operations; some flows use Supabase service-role queries directly.
+
+### App responsibilities
+
+- **`apps/vendor-web`**
+  - Public pages and registration flows.
+  - Same-origin API endpoints:
+    - Catch-all business API: `src/app/api/[...segments]/route.ts`
+    - Profile bootstrap/me endpoints
+    - Storage upload endpoint
+    - Dev env/auth sync diagnostic endpoints
+    - Dedicated driver application route (`/api/applications/driver`) using Supabase service-role client.
+  - Uses Supabase auth token in `Authorization: Bearer ...` for protected operations.
+
+- **`apps/admin-web`**
+  - Admin login and dashboard pages.
+  - Admin APIs:
+    - `/api/admin/me`
+    - `/api/admin/[...segments]`
+  - Admin APIs gate access using bearer token -> app user resolution -> admin role checks.
+
+- **`apps/mobile`**
+  - Uses Supabase auth directly in the app.
+  - Calls vendor-web API base (`EXPO_PUBLIC_VENDOR_API_URL`) for profile bootstrap/profile APIs and business endpoints.
+  - Auth provider loads/refreshes profile and degrades gracefully if profile fetch is unavailable.
+
+### Auth model
+
+- Supabase session tokens are the primary authentication artifact.
+- Shared auth helper `getAppUserIdFromBearer` maps Supabase `sub` to app `User` row.
+- Role checks (`ADMIN`, `SUPER_ADMIN`, `STORE_OWNER`, `DELIVERY_DRIVER`) are enforced in API routes via shared helpers.
+
+### Data model and role/application flows
+
+- Store applications and driver applications are persisted in database tables represented in Prisma schema.
+- Admin routes expose pending applications and review actions.
+- Delivery endpoints support assignment acceptance and status transitions.
+- Catalog/cart/checkout/payment/order routes are exposed under vendor-web catch-all API.
+
+### Shared package usage
+
+- `@marketplace/marketplace-server`: domain/data modules (admin, applications, catalog, cart, checkout, delivery, orders, products, auth helpers).
+- `@marketplace/shared-supabase`: role/access helpers, shared auth error utilities, shared client/env utilities.
+- `@marketplace/supabase-db-types`: typed Supabase table contracts for Supabase-client-based modules.
+
+## 5) Installation and Setup
+
+### Prerequisites
+
+- Node.js `>=18` (root `engines.node`)
+- pnpm
+- Supabase project (URL + publishable/anon key + service-role key)
+- PostgreSQL connection strings from Supabase Connect page (transaction + session pooler)
+
+### Setup order
+
+```bash
+pnpm install
+```
+
+Create env file from template:
+
+```bash
+cp .env.example .env
+```
+
+Then fill env values (see Environment Variables section).
+
+Generate Prisma client:
+
+```bash
+pnpm db:generate
+```
+
+Run migrations and seed:
+
+```bash
+pnpm db:migrate
 pnpm db:seed
 ```
 
-Demo users (password **`ChangeMe123!`** unless you change the seed):
-
-| Email | Role |
-|-------|------|
-| `admin@marketplace.com` | SUPER_ADMIN |
-| `vendor@example.com` | STORE_OWNER + sample store/products |
-
----
-
-## 6. Run admin-web
+Or one-shot:
 
 ```bash
-pnpm run dev:admin
+pnpm db:setup
 ```
 
-Open **http://localhost:3002/login** → sign in with the seeded admin (Supabase session) → dashboard calls same-origin **`/api/admin/*`** with the Supabase access token.
-
----
-
-## 7. Run vendor-web
+Optional auth linking for seeded users:
 
 ```bash
-pnpm run dev:vendor
+pnpm db:link-supabase-auth
 ```
 
-**http://localhost:3000** — vendor **`/api/*`** route handlers (Prisma). Auth is **Supabase** (`@supabase/ssr`); privileged routes send the Supabase access token.
+## 6) Run Commands
 
----
+All commands below are real scripts from repository `package.json` files.
 
-## 8. Run mobile (Expo)
+### Root workspace
 
 ```bash
-pnpm run dev:mobile
+pnpm dev
+pnpm dev:lite
+pnpm dev:all
+pnpm dev:all:lite
+pnpm dev:all:with-mobile
+pnpm dev:all:with-mobile:lite
+pnpm dev:vendor
+pnpm dev:vendor:lite
+pnpm dev:admin
+pnpm dev:admin:lite
+pnpm dev:mobile
+pnpm dev:mobile:lite
+pnpm dev:stack
+pnpm dev:stack:lite
 ```
 
-**Vendor API calls** use **`EXPO_PUBLIC_VENDOR_API_URL`** (default **`http://127.0.0.1:3000/api`**). The app uses **Supabase Auth** + **`POST /profile/bootstrap`** on vendor-web, then **`POST /applications/store`** / **`/applications/driver`** with the Supabase access token.
+### Database / Prisma (root)
 
----
+```bash
+pnpm db:generate
+pnpm db:migrate
+pnpm db:migrate:dev
+pnpm db:push
+pnpm db:seed
+pnpm db:studio
+pnpm db:setup
+pnpm db:link-supabase-auth
+```
 
-## Lower RAM while developing
+### Per app/package scripts
 
-Each dev server is a **separate Node process** with its own **V8 heap cap** (`NODE_OPTIONS=--max-old-space-size`). Running **`dev:all`** starts **two** Next apps (or **three** with mobile), plus **Cursor**, **browser**, etc. — that can still push **total system RAM** high.
+```bash
+# apps/vendor-web
+pnpm --filter vendor-web dev
+pnpm --filter vendor-web run dev:lite
+pnpm --filter vendor-web build
+pnpm --filter vendor-web start
+pnpm --filter vendor-web lint
 
-**What helps most**
+# apps/admin-web
+pnpm --filter admin-web dev
+pnpm --filter admin-web run dev:lite
+pnpm --filter admin-web build
+pnpm --filter admin-web start
+pnpm --filter admin-web lint
 
-1. **Run only what you need** — e.g. `pnpm run dev:vendor` instead of `dev:all` if you are not touching admin.
-2. **Use the lighter scripts** — same apps, **lower per-process heap caps** (slightly higher risk of “heap out of memory” on huge builds):
+# apps/mobile
+pnpm --filter mobile start
+pnpm --filter mobile run start:lite
+pnpm --filter mobile run android
+pnpm --filter mobile run ios
+pnpm --filter mobile run web
+pnpm --filter mobile run lint
 
-| Script | What runs | Heap caps (approx.) |
-|--------|-----------|---------------------|
-| `pnpm run dev:all:lite` | vendor + admin | each Next **1536** MB |
-| `pnpm run dev:all:with-mobile:lite` | above + Expo | Next/Expo **1536** MB each |
-| `pnpm run dev:stack:lite` | vendor only (lite heap) | see `package.json` |
+# packages/marketplace-server
+pnpm --filter @marketplace/marketplace-server build
 
-3. **Close** extra browser tabs, other heavy apps, and Docker/WSL when not needed.
+# packages/shared-supabase
+pnpm --filter @marketplace/shared-supabase build
 
----
+# packages/supabase-db-types
+pnpm --filter @marketplace/supabase-db-types generate
+```
 
-## Scripts reference
+## 7) Environment Variables
 
-| Script | Command |
-|--------|---------|
-| `pnpm dev` | Same as **`pnpm run dev:all`** — vendor + admin |
-| `pnpm dev:lite` | Same as **`pnpm run dev:all:lite`** — same apps, lower Node heap caps |
-| `pnpm db:generate` | `prisma generate` |
-| `pnpm db:migrate` | `prisma migrate deploy` |
-| `pnpm db:migrate:dev` | `prisma migrate dev` |
-| `pnpm db:push` | `prisma db push` (prototyping) |
-| `pnpm db:seed` | Run `prisma/seed.ts` |
-| `pnpm db:studio` | Prisma Studio |
-| `pnpm db:setup` | `db:generate` → `db:migrate` → `db:seed` (after `.env` is valid) |
-| `pnpm db:link-supabase-auth` | Link seeded `User` rows to Supabase Auth (`auth.users`) for admin-web login |
-| `pnpm run dev:stack` | vendor-web only (alias) |
-| `pnpm run dev:stack:lite` | vendor-web lite |
-| `pnpm run dev:all` | vendor + admin |
-| `pnpm run dev:all:lite` | vendor + admin — **lower Node heap** |
-| `pnpm run dev:all:with-mobile` | all of the above + mobile |
-| `pnpm run dev:all:with-mobile:lite` | same — **lower Node heap** |
-| `pnpm run dev:vendor:lite` / `dev:admin:lite` / `dev:mobile:lite` | one app at a time, lite caps |
+Use `.env.example` as canonical template. Below are variables referenced in source.
 
----
+### Root/shared server variables
 
-## Architecture notes
+- `DATABASE_URL`  
+  Runtime DB connection (used by Prisma runtime and seed scripts).
+- `DIRECT_URL`  
+  Prisma CLI migrations/push/studio connection.
+- `SUPABASE_URL`  
+  Server-side Supabase base URL fallback.
+- `SUPABASE_SERVICE_ROLE_KEY`  
+  Server-side privileged Supabase access (never expose client-side).
+- `SUPABASE_SECRET_KEY`  
+  Alternate name accepted in some modules.
+- `SUPABASE_JWT_SECRET`  
+  Required only for legacy HS256 token verification path.
+- `SEED_DEMO_PASSWORD`  
+  Overrides default seeded auth password for linking script/seed sync.
+- `LINK_SUPABASE_EMAILS`  
+  Comma-separated email list for `db:link-supabase-auth`.
+- `LINK_RESET_AUTH_PASSWORD`  
+  If `1`/`true`, resets linked auth user password.
 
-- **Database**: Prisma schema is the source of truth; Next **`/api`** handlers and seed use **Prisma** with the **`pg`** adapter (`DATABASE_URL`). **`pnpm db:seed`** uses the same pattern (`PrismaPg` + `DATABASE_URL` in `prisma/seed.ts`). **`DIRECT_URL`** (Session pooler `:5432`) is for Prisma CLI only (`migrate`, `db push`, `studio`) when IPv4 cannot reach Supabase’s direct Postgres host.  
-- **Migrations**: SQL lives under **`prisma/migrations/`**; new enum value **`INFO_REQUESTED`** is in **`1_add_store_status_info_requested`**.  
-- **Storage**: create buckets **`documents`**, **`profiles`**, **`stores`** in Supabase; vendor **`POST /api/storage/upload`** uses the service role.  
-- **Auth**: **Supabase Auth** for users; mobile and vendor call **`POST /api/profile/bootstrap`** to link `auth.users` to `public."User"`.  
-- **Admin**: **`/api/admin/*`** routes (overview, disputes, notifications, delivery assignments, **`POST /api/admin/delivery/assignments`**, products, payouts, refunds, returns).  
-- **Commerce (vendor `/api`)**: cart, checkout, mock payments, customer orders, driver delivery — all Prisma-backed.
+### Web client/public variables (admin-web/vendor-web)
 
----
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `NEXT_PUBLIC_SUPABASE_KEY`
+- `NEXT_PUBLIC_API_URL` (optional override for API base)
+- `API_INTERNAL_URL` (server-side fallback internal API base)
+- `NEXT_PUBLIC_SITE_URL` / `NEXT_PUBLIC_APP_URL` (used for auth email redirect construction in driver application route)
 
-## Documentation
+### Vendor-web additional flags
 
-- **`docs/DEV_SCRIPTS.md`** — dev commands, ports, RAM notes, and how `pnpm dev` maps to the stack.
-- **`docs/ARCHITECTURE_SUPABASE_FIRST.md`** — Supabase-first architecture notes.
-- **`docs/CONNECTIVITY_AUDIT.md`** — connectivity matrix and historical fixes.
+- `VENDOR_ALLOW_SYNC_SEED_AUTH`  
+  Enables dev sync endpoint behavior outside default development mode.
 
----
+### Mobile variables
 
-## After credentials work — verification checklist
+- `EXPO_PUBLIC_SUPABASE_URL`
+- `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `EXPO_PUBLIC_SUPABASE_KEY`
+- `EXPO_PUBLIC_VENDOR_API_URL` (base to vendor-web API, usually `<host>:3000/api`)
 
-1. `pnpm db:generate` (same as `pnpm exec prisma generate`)  
-2. `pnpm db:migrate` (or `db:migrate:dev` during schema work)  
-3. `pnpm db:seed`  
-   - Or one shot: `pnpm db:setup` (runs all three in order)  
-4. Vendor + admin running (`pnpm dev`)  
-5. Admin UI **http://localhost:3002/login** (Supabase) → applications inbox via **`/api/admin/*`**  
-6. Vendor **http://localhost:3000** → dashboard → products load from **`GET /api/stores/me/products`** (Supabase JWT)  
-7. Mobile → store/driver registration (Supabase + **`EXPO_PUBLIC_VENDOR_API_URL`**) → **`POST …/applications/store`** / **`…/applications/driver`**
+### App-local env files in active use
+
+- `apps/admin-web/.env.local` (admin route handlers need server vars here in dev)
+- `apps/vendor-web/.env.local` (vendor route handlers and auth/env checks)
+- `apps/mobile/.env.local` (Expo public variables)
+
+## 8) Main Features
+
+Implemented (based on route handlers and shared modules):
+
+- Supabase-based auth/session handling in web + mobile
+- Admin dashboard APIs:
+  - overview, users, stores, drivers, orders
+  - pending store/driver applications
+  - review actions for store/driver applications
+  - payouts/refunds/returns/disputes/notifications/delivery assignments
+- Vendor/store flows:
+  - store application submission and status fetch
+  - vendor product CRUD operations and moderation-facing support
+  - vendor order listing/detail and ready-for-pickup actions
+- Driver flows:
+  - driver application submission route with auth + verification checks
+  - delivery assignment acceptance/status update endpoints
+- Customer flows:
+  - catalog categories/products
+  - cart operations
+  - checkout and mock payment confirm/fail endpoints
+  - customer order list/detail/tracking
+- Mobile profile bootstrap and profile read/update via vendor-web APIs
+- Storage upload endpoint under vendor-web API
+
+## 9) Developer Notes
+
+- This repo is currently **hybrid Prisma + Supabase**. Prisma is still required for many business modules.
+- `@marketplace/marketplace-server` exports still include `./prisma`; several modules are Prisma-backed.
+- Some flows have begun Supabase-native migration (e.g., admin `/api/admin/me`, vendor driver application route).
+- Running both Next apps + Expo can be memory-heavy; use `dev:*:lite` scripts when needed.
+- Mobile app expects vendor API to be reachable by network from device/emulator.
+- `apps/vendor-web` currently has both catch-all `/api/[...segments]` and dedicated `/api/applications/driver`; dedicated route takes precedence for that path.
+
+## 10) Troubleshooting
+
+### `next is not recognized`
+
+Dependencies are missing in app workspace.
+
+```bash
+pnpm install
+```
+
+### Port already in use (`EADDRINUSE`)
+
+Stop existing Node/Next processes and restart dev.
+
+### Prisma client runtime errors (`Cannot find module '.prisma/client/default'`)
+
+Prisma client not generated.
+
+```bash
+pnpm db:generate
+```
+
+### Admin `/api/admin/me` role lookup permission errors
+
+Ensure `SUPABASE_SERVICE_ROLE_KEY` is set in `apps/admin-web/.env.local` and DB grants are configured for `service_role`.
+
+### Driver application 4xx errors
+
+- Verify user is signed in and email is confirmed.
+- Verify vendor-web env has:
+  - `SUPABASE_URL`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - public Supabase keys
+- Ensure required form fields are filled (contact email auto-filled from signed-in user).
+
+### Mobile cannot reach API
+
+Set `EXPO_PUBLIC_VENDOR_API_URL` to a reachable host/IP (not `localhost` from physical device).
+
+### Supabase key confusion
+
+- `sb_publishable_*` / anon keys: client/public use.
+- `sb_secret_*` / service-role key: server only.
+- Rotate keys if exposed.
+
+## 11) Additional Documentation
+
+- `docs/DEV_SCRIPTS.md` — command matrix, ports, memory notes
+- `docs/SETUP_GUIDE.md` — setup walkthrough
+- `docs/API_SPEC.md` — API architecture summary
+- `docs/ORDER_DELIVERY_FLOW.md` — delivery lifecycle reference
+- `docs/ARCHITECTURE_SUPABASE_FIRST.md` — target-state architecture
+- `docs/CONNECTIVITY_AUDIT.md` — historical connectivity and integration notes

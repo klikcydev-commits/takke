@@ -11,7 +11,6 @@
   },
   "dependencies": {
     "@marketplace/shared-supabase": "workspace:*",
-    "@marketplace/marketplace-server": "workspace:*",
     "@swc/helpers": "^0.5.15",
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",

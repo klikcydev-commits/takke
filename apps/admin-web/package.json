@@ -10,7 +10,6 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@marketplace/marketplace-server": "workspace:*",
     "@marketplace/shared-supabase": "workspace:*",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.1",
