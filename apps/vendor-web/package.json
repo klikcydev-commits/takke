@@ -1,0 +1,39 @@
+{
+  "name": "vendor-web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "cross-env NODE_OPTIONS=--max-old-space-size=2048 next dev",
+    "dev:lite": "cross-env NODE_OPTIONS=--max-old-space-size=1536 next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@marketplace/shared-supabase": "workspace:*",
+    "@marketplace/marketplace-server": "workspace:*",
+    "@swc/helpers": "^0.5.15",
+    "@supabase/ssr": "latest",
+    "@supabase/supabase-js": "latest",
+    "@tanstack/react-query": "latest",
+    "clsx": "latest",
+    "framer-motion": "^12.38.0",
+    "lucide-react": "latest",
+    "next": "16.2.3",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "tailwind-merge": "latest",
+    "zustand": "latest"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.3",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
